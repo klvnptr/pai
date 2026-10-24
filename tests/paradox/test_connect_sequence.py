@@ -376,3 +376,24 @@ async def test_transport_closes_when_disconnect_is_cancelled():
         await task
 
     assert connection.transport is not None and connection.transport.closed
+
+
+@pytest.mark.asyncio
+async def test_initiate_hook_exchange_follows_retransmit_requests():
+    class StrictEcho(ScriptedSerial):
+        retransmit_requests = False
+
+        async def on_initiate_communication(
+            self, reply: Container, exchange: Exchange
+        ) -> None:
+            await exchange(reply.fields.data + reply.checksum, lambda m: False)
+
+    connection = StrictEcho(EVO_REPLIES)
+    alarm = make_alarm(connection)
+
+    assert not await alarm.connect()
+    assert connection.transport is not None
+    assert [m.hex() for m in connection.transport.tx] == [
+        INITIATE,
+        EVO_REPLIES[0x72].hex(),
+    ]
