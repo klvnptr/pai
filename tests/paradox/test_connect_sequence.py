@@ -11,10 +11,11 @@ payloads it carries.
 import asyncio
 from typing import Dict, List, Optional, Union
 
+from construct import Container
 import pytest
 
 from paradox.config import config as cfg
-from paradox.connections.connection import Connection
+from paradox.connections.connection import Connection, Exchange
 from paradox.connections.ip.connection import BareIPConnection, LocalIPConnection
 from paradox.connections.serial.connection import SerialCommunication
 from paradox.connections.serial.protocol import SerialConnectionProtocol
@@ -263,3 +264,57 @@ async def test_send_wait_does_not_retransmit_when_connection_forbids_it():
         retransmit_requests = False
 
     assert await _request_without_reply(NoRetransmit(EVO_REPLIES)) == ["5000"]
+
+
+class HookedSerial(ScriptedSerial):
+    """Records the connection hooks ``Paradox`` calls."""
+
+    def __init__(self, replies: Dict[int, bytes]):
+        super().__init__(replies)
+        self.initiate_replies: List[Container] = []
+        self.echoes: List[Optional[Container]] = []
+
+    def sent(self) -> List[str]:
+        assert self.transport is not None
+        return [m.hex() for m in self.transport.tx]
+
+    async def on_initiate_communication(
+        self, reply: Container, exchange: Exchange
+    ) -> None:
+        self.initiate_replies.append(reply)
+        assert self.sent() == [INITIATE]
+        raw = reply.fields.data + reply.checksum
+        self.echoes.append(
+            await exchange(raw, lambda m: m.fields.value.po.command == 0x7)
+        )
+
+
+@pytest.mark.asyncio
+async def test_initiate_hook_runs_once_before_start_communication():
+    connection = HookedSerial(EVO_REPLIES)
+    alarm = make_alarm(connection)
+
+    assert await alarm.connect()
+
+    assert len(connection.initiate_replies) == 1
+    reply = connection.initiate_replies[0]
+    assert reply.fields.data + reply.checksum == EVO_REPLIES[0x72]
+    echo = connection.echoes[0]
+    assert echo is not None and echo.fields.data == reply.fields.data
+    assert connection.sent()[:3] == [INITIATE, EVO_REPLIES[0x72].hex(), START]
+
+
+@pytest.mark.asyncio
+async def test_initiate_hook_can_abort_connect():
+    class Refusing(ScriptedSerial):
+        async def on_initiate_communication(
+            self, reply: Container, exchange: Exchange
+        ) -> None:
+            raise ConnectionError("refused")
+
+    connection = Refusing(EVO_REPLIES)
+    alarm = make_alarm(connection)
+
+    assert not await alarm.connect()
+    assert connection.transport is not None
+    assert [m.hex() for m in connection.transport.tx] == [INITIATE]
