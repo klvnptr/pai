@@ -971,7 +971,12 @@ class Paradox:
             logger.info("Cleaning previous session. Closing connection")
             # Write directly as this can be called from other contexts
 
-            self.connection.write(panel.get_message("CloseConnection").build(dict()))
+            try:
+                self.connection.write(
+                    panel.get_message("CloseConnection").build(dict())
+                )
+            except ConnectionError as e:
+                logger.warning("Could not send CloseConnection: %s", e)
 
     def _on_labels_load(self, data):
         for k, d in data.items():
