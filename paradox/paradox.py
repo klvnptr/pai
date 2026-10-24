@@ -286,7 +286,7 @@ class Paradox:
                 logger.info("Initiating panel connection")
                 reply = await self.send_wait(
                     self.panel.get_message("StartCommunication"),
-                    args=dict(source_id=0x2),
+                    args=dict(source_id=self.connection.start_communication_source_id),
                     reply_expected=0x0,
                 )
 

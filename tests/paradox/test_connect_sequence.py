@@ -225,3 +225,15 @@ async def test_mg6250_serial_skips_start_communication(mocker):
         INITIATE,
         "70250000000000000000000000000000000000000000000000000000000000000000000095",
     ]
+
+
+@pytest.mark.asyncio
+async def test_start_communication_source_id_comes_from_connection():
+    class SourceZero(ScriptedSerial):
+        start_communication_source_id = 0x0
+
+    connection = SourceZero(EVO_REPLIES)
+    tx = await run_session(connection)
+
+    assert tx[1] == "5f20" + "00" * 31 + "000000" + "7f"
+    assert tx[2:] == EVO_TX[2:]

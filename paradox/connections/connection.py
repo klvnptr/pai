@@ -9,7 +9,17 @@ logger = logging.getLogger("PAI").getChild(__name__)
 
 
 class Connection(AsyncMessageManager, ConnectionHandler):
+    """Base for all panel links.
+
+    Besides the transport, a connection may take part in the session the
+    panel sees. ``Paradox`` calls the hooks below at fixed points; the
+    defaults keep the plain behaviour every existing connection relies on.
+    """
+
     _protocol: ConnectionProtocol
+
+    #: ``source_id`` sent in StartCommunication.
+    start_communication_source_id: int = 0x2
 
     def __init__(self):
         super().__init__()
