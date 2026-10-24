@@ -21,6 +21,11 @@ class Connection(AsyncMessageManager, ConnectionHandler):
     #: ``source_id`` sent in StartCommunication.
     start_communication_source_id: int = 0x2
 
+    #: Whether ``Paradox.send_wait()`` may resend a request after a timeout.
+    #: Disable it for links where a lost reply leaves the session state
+    #: unknown, so a timeout propagates after the first attempt.
+    retransmit_requests: bool = True
+
     def __init__(self):
         super().__init__()
         self.connected = False

@@ -237,3 +237,29 @@ async def test_start_communication_source_id_comes_from_connection():
 
     assert tx[1] == "5f20" + "00" * 31 + "000000" + "7f"
     assert tx[2:] == EVO_TX[2:]
+
+
+async def _request_without_reply(connection: ScriptedSerial) -> List[str]:
+    alarm = make_alarm(connection)
+    assert await alarm.connect()
+    assert connection.transport is not None
+    connection.transport.tx.clear()
+
+    with pytest.raises(asyncio.TimeoutError):
+        await alarm.send_wait(
+            message=bytes.fromhex("5000"), reply_expected=0x5, timeout=0.001
+        )
+    return [m.hex() for m in connection.transport.tx]
+
+
+@pytest.mark.asyncio
+async def test_send_wait_retransmits_by_default():
+    assert await _request_without_reply(ScriptedSerial(EVO_REPLIES)) == ["5000"] * 5
+
+
+@pytest.mark.asyncio
+async def test_send_wait_does_not_retransmit_when_connection_forbids_it():
+    class NoRetransmit(ScriptedSerial):
+        retransmit_requests = False
+
+    assert await _request_without_reply(NoRetransmit(EVO_REPLIES)) == ["5000"]

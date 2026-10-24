@@ -512,6 +512,9 @@ class Paradox:
         if message is None and message_type is not None:
             message = message_type.build(dict(fields=dict(value=args)))
 
+        if not self.connection.retransmit_requests:
+            retries = 1
+
         attempt = 1
 
         while attempt <= retries:
