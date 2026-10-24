@@ -934,7 +934,12 @@ class Paradox:
 
         self._clean_session()
         if self.connection.connected:
-            await self.connection.close()
+            try:
+                await self.connection.end_session()
+            except Exception:
+                logger.exception("Error while ending the panel session")
+            finally:
+                await self.connection.close()
             logger.info("Disconnected from the Alarm Panel")
 
     async def pause(self):

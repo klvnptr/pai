@@ -89,6 +89,14 @@ class Connection(AsyncMessageManager, ConnectionHandler):
         connect.
         """
 
+    async def end_session(self) -> None:
+        """Called on disconnect while connected, after CloseConnection was sent.
+
+        The transport is closed right after this returns, raises or is
+        cancelled. Implementations bound their own waiting and do not wait on
+        ``Paradox.request_lock``: disconnect may run while a request holds it.
+        """
+
     def variable_message_length(self, mode):
         if self._protocol is not None:
             self._protocol.variable_message_length(mode)

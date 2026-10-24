@@ -318,3 +318,61 @@ async def test_initiate_hook_can_abort_connect():
     assert not await alarm.connect()
     assert connection.transport is not None
     assert [m.hex() for m in connection.transport.tx] == [INITIATE]
+
+
+@pytest.mark.asyncio
+async def test_end_session_runs_once_between_close_message_and_transport_close():
+    seen: List[List[str]] = []
+
+    class Ending(ScriptedSerial):
+        async def end_session(self) -> None:
+            assert self.transport is not None and not self.transport.closed
+            seen.append([m.hex() for m in self.transport.tx])
+
+    connection = Ending(EVO_REPLIES)
+    alarm = make_alarm(connection)
+    assert await alarm.connect()
+
+    await alarm.disconnect()
+    await alarm.disconnect()
+
+    assert seen == [EVO_TX]
+    assert connection.transport is not None and connection.transport.closed
+
+
+@pytest.mark.asyncio
+async def test_transport_closes_when_end_session_fails():
+    class Failing(ScriptedSerial):
+        async def end_session(self) -> None:
+            raise RuntimeError("no ack")
+
+    connection = Failing(EVO_REPLIES)
+    alarm = make_alarm(connection)
+    assert await alarm.connect()
+
+    await alarm.disconnect()
+
+    assert connection.transport is not None and connection.transport.closed
+    assert not connection.connected
+
+
+@pytest.mark.asyncio
+async def test_transport_closes_when_disconnect_is_cancelled():
+    entered = asyncio.Event()
+
+    class Waiting(ScriptedSerial):
+        async def end_session(self) -> None:
+            entered.set()
+            await asyncio.sleep(3600)
+
+    connection = Waiting(EVO_REPLIES)
+    alarm = make_alarm(connection)
+    assert await alarm.connect()
+
+    task = asyncio.ensure_future(alarm.disconnect())
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert connection.transport is not None and connection.transport.closed
